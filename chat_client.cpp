@@ -2,8 +2,8 @@
 #include <boost/asio.hpp>
 #include <cstdlib>
 #include <deque>
-#include <string>
 #include <iostream>
+#include <string>
 #include <thread>
 
 using boost::asio::ip::tcp;
@@ -42,10 +42,10 @@ private:
 
     void do_read_header() {
         boost::asio::async_read(
-            socket_,
-            boost::asio::buffer(read_msg_.data(), chat_message::header_length),
+            socket_, boost::asio::buffer(read_msg_.header(),
+                                         chat_message::header_length),
             [this](boost::system::error_code ec, size_t /*length*/) {
-                if (!ec && read_msg_.decode_header())
+                if (!ec && read_msg_.decode())
                     do_read_body();
                 else
                     socket_.close();
@@ -58,8 +58,7 @@ private:
             boost::asio::buffer(read_msg_.body(), read_msg_.body_length()),
             [this](boost::system::error_code ec, size_t /*length*/) {
                 if (!ec) {
-                    std::cout.write(read_msg_.body(), read_msg_.body_length());
-                    std::cout << std::endl;
+                    print_msg(read_msg_);
                     do_read_header();
                 } else
                     socket_.close();
@@ -77,6 +76,11 @@ private:
                 } else
                     socket_.close();
             });
+    }
+
+    static void print_msg(const chat_message &msg) {
+        std::cout.write(msg.body(), msg.body_length());
+        std::cout << std::endl;
     }
 
 private:
@@ -102,7 +106,7 @@ int main(int argc, char *argv[]) {
         std::thread th([&io_service]() { io_service.run(); });
 
         std::string message;
-        while (std::cin >> message)
+        while (std::getline(std::cin, message))
             client.write(chat_message(message));
 
         client.close();

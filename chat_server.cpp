@@ -77,7 +77,7 @@ private:
             socket_,
             boost::asio::buffer(read_msg_.data(), chat_message::header_length),
             [this, self](boost::system::error_code ec, size_t /*length*/) {
-                if (!ec && read_msg_.decode_header())
+                if (!ec && read_msg_.decode())
                     do_read_body();
                 else
                     room_.leave(shared_from_this());
