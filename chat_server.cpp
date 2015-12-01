@@ -1,4 +1,3 @@
-#include "chat_message.h"
 #include <boost/asio.hpp>
 #include <cstdlib>
 #include <deque>
@@ -10,14 +9,10 @@
 
 using boost::asio::ip::tcp;
 
-//--------------------------------------------------------------------------------
-typedef std::deque<chat_message> chat_message_queue;
-//--------------------------------------------------------------------------------
-
 class chat_participant {
 public:
     virtual ~chat_participant() {}
-    virtual void deliver(const chat_message &msg) = 0;
+    virtual void deliver(const std::string &msg) = 0;
 };
 
 typedef std::shared_ptr<chat_participant> chat_participant_ptr;
@@ -36,7 +31,7 @@ public:
         participants_.erase(participant);
     }
 
-    void deliver(const chat_message &msg) {
+    void deliver(const std::string &msg) {
         recent_msgs_.push_back(msg);
         while (recent_msgs_.size() > max_recent_msgs)
             recent_msgs_.pop_front();
@@ -48,7 +43,7 @@ public:
 private:
     std::set<chat_participant_ptr> participants_;
     const static int max_recent_msgs = 100;
-    chat_message_queue recent_msgs_;
+    std::deque<std::string> recent_msgs_;
 };
 
 //--------------------------------------------------------------------------------
@@ -61,38 +56,28 @@ public:
 
     void start() {
         room_.join(shared_from_this());
-        do_read_header();
+        do_read();
     }
 
-    void deliver(const chat_message &msg) {
-        bool write_in_prograss = !write_msgs_.empty();
+    void deliver(const std::string &msg) {
+        auto write_in_prograss = !write_msgs_.empty();
         write_msgs_.push_back(msg);
         if (!write_in_prograss) do_write();
     }
 
 private:
-    void do_read_header() {
+    void do_read() {
         auto self(shared_from_this());
-        boost::asio::async_read(
-            socket_,
-            boost::asio::buffer(read_msg_.data(), chat_message::header_length),
-            [this, self](boost::system::error_code ec, size_t /*length*/) {
-                if (!ec && read_msg_.decode())
-                    do_read_body();
-                else
-                    room_.leave(shared_from_this());
-            });
-    }
-
-    void do_read_body() {
-        auto self(shared_from_this());
-        boost::asio::async_read(
-            socket_,
-            boost::asio::buffer(read_msg_.body(), read_msg_.body_length()),
-            [this, self](boost::system::error_code ec, size_t /*length*/) {
+        auto buffer = std::make_shared<boost::asio::streambuf>();
+        boost::asio::async_read_until(
+            socket_, *buffer, '\0',
+            [this, self, buffer](boost::system::error_code ec,
+                                 size_t /*length*/) {
                 if (!ec) {
+                    std::istream is(buffer.get());
+                    std::getline(is, read_msg_, '\0');
                     room_.deliver(read_msg_);
-                    do_read_header();
+                    do_read();
                 } else
                     room_.leave(shared_from_this());
             });
@@ -100,10 +85,12 @@ private:
 
     void do_write() {
         auto self(shared_from_this());
+        auto buffer = std::make_shared<boost::asio::streambuf>();
+        std::ostream os(buffer.get());
+        os << write_msgs_.front() << '\0';
         boost::asio::async_write(
-            socket_, boost::asio::buffer(write_msgs_.front().data(),
-                                         write_msgs_.front().length()),
-            [this, self](boost::system::error_code ec, size_t /*length*/) {
+            socket_, *buffer, [this, self, buffer](boost::system::error_code ec,
+                                                   size_t /*length*/) {
                 if (!ec) {
                     write_msgs_.pop_front();
                     if (!write_msgs_.empty()) do_write();
@@ -114,8 +101,8 @@ private:
 
     tcp::socket socket_;
     chat_room &room_;
-    chat_message read_msg_;
-    chat_message_queue write_msgs_;
+    std::string read_msg_;
+    std::deque<std::string> write_msgs_;
 };
 
 //--------------------------------------------------------------------------------
