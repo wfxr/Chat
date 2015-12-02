@@ -1,7 +1,7 @@
 #include <boost/asio.hpp>
 #include <cstdlib>
-#include <deque>
 #include <iostream>
+#include <queue>
 #include <string>
 #include <thread>
 
@@ -15,11 +15,14 @@ public:
         do_connect(endpoint_iterator);
     }
 
-    void write(const std::string &msg) {
+    // Note:发送消息不宜采用streambuf实现
+    // 使用streambuf执行异步写入需要streambuf在写入期间不被外部改动，
+    // 而外部如果使用循环调用push方法，可能上一次的异步写入尚未完成，
+    // streambuf就已经被下一次的push操作改写
+    void push(const std::string &msg) {
         io_service_.post([this, msg]() {
-            auto write_in_progress = !write_msgs_.empty();
-            write_msgs_.push_back(msg);
-            if (!write_in_progress) do_write();
+            push_queue_.push(msg + '\0');
+            if (!push_running_) do_push();
         });
     }
 
@@ -32,46 +35,55 @@ private:
         boost::asio::async_connect(
             socket_, endpoint_iterator,
             [this](boost::system::error_code ec, tcp::resolver::iterator) {
-                if (!ec) do_read();
+                if (!ec) do_pull();
             });
     }
 
-    void do_read() {
-        auto buffer = std::make_shared<boost::asio::streambuf>();
+    void do_pull() {
         boost::asio::async_read_until(
-            socket_, *buffer, '\0',
-            [this, buffer](boost::system::error_code ec, size_t /*length*/) {
+            socket_, pull_buf_, '\0',
+            [this](boost::system::error_code ec, size_t /*length*/) {
                 if (!ec) {
-                    std::istream is(buffer.get());
-                    std::getline(is, read_msg_, '\0');
-                    std::cout << read_msg_ << std::endl;
-                    do_read();
-                } else {
-                    socket_.close();
-                }
-            });
-    }
-
-    void do_write() {
-        auto buffer = std::make_shared<boost::asio::streambuf>();
-        std::ostream os(buffer.get());
-        os << write_msgs_.front() << '\0';
-        boost::asio::async_write(
-            socket_, *buffer,
-            [this, buffer](boost::system::error_code ec, size_t /*length*/) {
-                if (!ec) {
-                    write_msgs_.pop_front();
-                    if (!write_msgs_.empty()) do_write();
+                    read_message();
+                    print_message();
+                    do_pull();
                 } else
                     socket_.close();
             });
     }
 
+    void do_push() {
+        push_running_ = true;
+        boost::asio::async_write(
+            socket_, boost::asio::buffer(push_queue_.front()),
+            [this](boost::system::error_code ec, size_t /*length*/) {
+                if (!ec) {
+                    push_queue_.pop();
+                    if (push_queue_.empty())
+                        push_running_ = false;
+                    else
+                        do_push();
+                } else
+                    socket_.close();
+            });
+    }
+
+    void read_message() {
+        std::istream is(&pull_buf_);
+        std::getline(is, pulled_message_, '\0');
+    }
+
+    void print_message() {
+        std::cout << pulled_message_ << std::endl;
+    }
+
 private:
     boost::asio::io_service &io_service_;
     tcp::socket socket_;
-    std::string read_msg_;
-    std::deque<std::string> write_msgs_;
+    bool push_running_ = false;
+    boost::asio::streambuf pull_buf_;
+    std::queue<std::string> push_queue_;
+    std::string pulled_message_;
 };
 
 int main(int argc, char *argv[]) {
@@ -91,7 +103,7 @@ int main(int argc, char *argv[]) {
 
         std::string message;
         while (std::getline(std::cin, message))
-            client.write(message);
+            client.push(message);
 
         client.close();
         th.join();

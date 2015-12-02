@@ -1,6 +1,7 @@
 #include <boost/asio.hpp>
-#include <cstdlib>
 #include <deque>
+#include <cstdlib>
+#include <queue>
 #include <iostream>
 #include <list>
 #include <memory>
@@ -56,53 +57,58 @@ public:
 
     void start() {
         room_.join(shared_from_this());
-        do_read();
+        do_pull();
     }
 
     void deliver(const std::string &msg) {
-        auto write_in_prograss = !write_msgs_.empty();
-        write_msgs_.push_back(msg);
-        if (!write_in_prograss) do_write();
+        push_queue_.push(msg + '\0');
+        if (!push_running_) do_push();
     }
 
 private:
-    void do_read() {
+    void do_pull() {
         auto self(shared_from_this());
-        auto buffer = std::make_shared<boost::asio::streambuf>();
         boost::asio::async_read_until(
-            socket_, *buffer, '\0',
-            [this, self, buffer](boost::system::error_code ec,
-                                 size_t /*length*/) {
+            socket_, pull_buf_, '\0',
+            [this, self](boost::system::error_code ec, size_t /*length*/) {
                 if (!ec) {
-                    std::istream is(buffer.get());
-                    std::getline(is, read_msg_, '\0');
-                    room_.deliver(read_msg_);
-                    do_read();
+                    room_.deliver(take_pulled_msg());
+                    do_pull();
                 } else
                     room_.leave(shared_from_this());
             });
     }
 
-    void do_write() {
+    void do_push() {
+        push_running_ = true;
         auto self(shared_from_this());
-        auto buffer = std::make_shared<boost::asio::streambuf>();
-        std::ostream os(buffer.get());
-        os << write_msgs_.front() << '\0';
         boost::asio::async_write(
-            socket_, *buffer, [this, self, buffer](boost::system::error_code ec,
-                                                   size_t /*length*/) {
+            socket_, boost::asio::buffer(push_queue_.front()),
+            [this, self](boost::system::error_code ec, size_t /*length*/) {
                 if (!ec) {
-                    write_msgs_.pop_front();
-                    if (!write_msgs_.empty()) do_write();
+                    push_queue_.pop();
+                    if (push_queue_.empty())
+                        push_running_ = false;
+                    else
+                        do_push();
                 } else
                     room_.leave(shared_from_this());
             });
     }
 
+    std::string take_pulled_msg() {
+        std::string message;
+        std::istream is(&pull_buf_);
+        std::getline(is, message, '\0');
+        return message;
+    }
+
+private:
     tcp::socket socket_;
     chat_room &room_;
-    std::string read_msg_;
-    std::deque<std::string> write_msgs_;
+    bool push_running_ = false;
+    boost::asio::streambuf pull_buf_;
+    std::queue<std::string> push_queue_;
 };
 
 //--------------------------------------------------------------------------------
