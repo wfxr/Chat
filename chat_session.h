@@ -1,20 +1,24 @@
 #include <boost/asio.hpp>
+#include <functional>
 #include <iostream>
 #include <queue>
 #include <string>
 
 using boost::asio::ip::tcp;
 
+typedef std::function<void(const std::string &)> pulled_message_handler;
+
 class chat_session {
 public:
-    chat_session(tcp::socket socket) : socket_(std::move(socket)) {}
+    chat_session(tcp::socket &&socket, pulled_message_handler handler)
+        : socket_(std::move(socket)), pulled_message_handler_(handler) {
+        do_pull();
+    }
 
     void push(const std::string &msg) {
         push_queue_.push(msg + '\0');
         if (!push_running_) do_push();
     }
-
-    void start() { do_pull(); }
 
 private:
     void do_pull() {
@@ -49,7 +53,9 @@ private:
         std::getline(is, pulled_message_, '\0');
     }
 
-    void handle_pulled_message() { std::cout << pulled_message_ << std::endl; }
+    void handle_pulled_message() {
+        if (pulled_message_handler_) pulled_message_handler_(pulled_message_);
+    }
 
 private:
     tcp::socket socket_;
@@ -57,4 +63,5 @@ private:
     boost::asio::streambuf pull_buf_;
     std::queue<std::string> push_queue_;
     std::string pulled_message_;
+    pulled_message_handler pulled_message_handler_;
 };

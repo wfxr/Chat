@@ -16,10 +16,7 @@ public:
         create_chat_session();
     }
 
-    void start() {
-        chat_session_->start();
-        io_service_.run();
-    }
+    void start() { io_service_.run(); }
 
     void close() { chat_session_.reset(); }
 
@@ -31,7 +28,10 @@ private:
         tcp::resolver resolver(io_service_);
         auto endpoint_iterator = resolver.resolve({host_, port_});
         socket.connect(*endpoint_iterator);
-        chat_session_ = std::make_shared<chat_session>(std::move(socket));
+        chat_session_ = std::make_shared<chat_session>(
+            std::move(socket), [](const std::string &message) {
+                std::cout << message << std::endl;
+            });
     }
 
     std::string host_;
