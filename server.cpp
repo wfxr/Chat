@@ -1,24 +1,23 @@
-#include "chat_room.h"
-#include "chat_session.h"
+#include "room.h"
 #include <boost/asio.hpp>
 #include <list>
 
 using boost::asio::ip::tcp;
 
-class chat_server {
+class ChatServer {
 public:
-    void create_chat_room(const std::string &port) {
+    void CreateChatRoom(const std::string &port) {
         tcp::endpoint endpoint(tcp::v4(), std::stoi(port));
-        tcp::socket socket(io_service_);
-        tcp::acceptor acceptor(io_service_, endpoint);
+        tcp::socket socket(ioService_);
+        tcp::acceptor acceptor(ioService_, endpoint);
         chat_rooms_.emplace_back(std::move(socket), std::move(acceptor));
     }
 
-    void start() { io_service_.run(); }
+    void Start() { ioService_.run(); }
 
 private:
-    boost::asio::io_service io_service_;
-    std::list<chat_room> chat_rooms_;
+    boost::asio::io_service ioService_;
+    std::list<ChatRoom> chat_rooms_;
 };
 
 int main(int argc, char *argv[]) {
@@ -29,11 +28,11 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        chat_server server;
+        ChatServer server;
         for (int i = 1; i < argc; ++i)
-            server.create_chat_room(argv[i]);
+            server.CreateChatRoom(argv[i]);
 
-        server.start();
+        server.Start();
     } catch (std::exception &e) {
         std::cerr << "Exception: " << e.what() << std::endl;
     }
