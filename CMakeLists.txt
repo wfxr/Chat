@@ -3,8 +3,8 @@ project (Chat)
 
 set(CMAKE_CXX_FLAGS "-Wall -Werror -std=c++14 -stdlib=libc++")
 
-add_executable (chat_client chat_client.cpp chat_session.h)
-add_executable (chat_server chat_server.cpp chat_session.h)
+add_executable (chat_client chat_client.cpp)
+add_executable (chat_server chat_server.cpp)
 
 find_package (Boost 1.59.0 COMPONENTS system REQUIRED)
 find_package (Threads REQUIRED)
