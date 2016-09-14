@@ -1,5 +1,6 @@
 #include "session.h"
 #include <boost/asio.hpp>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -39,21 +40,27 @@ private:
 
 int main(int argc, char *argv[]) {
     try {
-        if (argc != 3) {
-            std::cerr << "Usage: " << argv[0] << " <host> <port>" << std::endl;
+        std::string host, port;
+        if (argc == 2) {
+            host = "localhost";
+            port = argv[1];
+        } else if (argc == 3) {
+            host = argv[0];
+            port = argv[1];
+        } else {
+            std::cerr << "Usage: " << argv[0] << " [<host>] <port>"
+                      << std::endl;
             return 1;
         }
 
-        std::string host(argv[1]), port(argv[2]);
         Client client(host, port);
-        std::thread thread([&client]() { client.Start(); });
+        std::thread thread([&client] { client.Start(); });
         std::string message;
         while (std::getline(std::cin, message))
             client.Commit(message);
 
         client.Close();
         thread.join();
-
     } catch (std::exception &e) {
         std::cerr << "Exception: " << e.what() << std::endl;
     }

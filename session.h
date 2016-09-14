@@ -8,7 +8,7 @@
 
 using boost::asio::ip::tcp;
 
-typedef std::function<void(const std::string &)> PulledMsgHandler;
+using PulledMsgHandler = std::function<void(const std::string &)>;
 
 class Session {
 public:
@@ -28,7 +28,7 @@ private:
             socket_, pullBuf_, '\0',
             [this](boost::system::error_code ec, size_t /*length*/) {
                 if (!ec) {
-                    ReadPulledMsg();
+                    FetchPulledMsg();
                     HandlePulledMsg();
                     DoPull();
                 }
@@ -50,7 +50,7 @@ private:
             });
     }
 
-    void ReadPulledMsg() {
+    void FetchPulledMsg() {
         std::istream is(&pullBuf_);
         std::getline(is, pulledMsg_, '\0');
     }

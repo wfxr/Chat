@@ -7,7 +7,7 @@
 #include <memory>
 #include <set>
 
-typedef std::shared_ptr<Session> SessionPtr;
+using SessionPtr = std::shared_ptr<Session>;
 
 class ChatRoom {
 public:

@@ -10,14 +10,14 @@ public:
         tcp::endpoint endpoint(tcp::v4(), std::stoi(port));
         tcp::socket socket(ioService_);
         tcp::acceptor acceptor(ioService_, endpoint);
-        chat_rooms_.emplace_back(std::move(socket), std::move(acceptor));
+        chatRooms_.emplace_back(std::move(socket), std::move(acceptor));
     }
 
     void Start() { ioService_.run(); }
 
 private:
     boost::asio::io_service ioService_;
-    std::list<ChatRoom> chat_rooms_;
+    std::list<ChatRoom> chatRooms_;
 };
 
 int main(int argc, char *argv[]) {
