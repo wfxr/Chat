@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 3.1.0)
 project (Chat)
 
-set(CMAKE_CXX_FLAGS "-Wall -Werror -std=c++14 -stdlib=libc++")
+set(CMAKE_CXX_FLAGS "-Wall -Werror -std=c++14")
 
 add_executable (client client.cpp)
 add_executable (server server.cpp)
